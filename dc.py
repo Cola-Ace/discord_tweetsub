@@ -9,6 +9,7 @@ from discord.ext import commands, tasks
 dc_token = "" # discord机器人的token
 guild_id = "914821735788974120" # 频道ID
 permission_roles = ["Re:0 Wiki Crew│wiki管理團隊│wiki管理团队", "Verity"] # 拥有此权限组的用户视为管理员
+nitter_url = "nitter.poast.org"
 loop_min = 1 # 检测间隔, 以分钟为间隔
 
 # 下面的部分不要动
@@ -112,14 +113,14 @@ def get_latest_tweet(account):
     headers = {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/117.0.0.0 Safari/537.36 Edg/117.0.2045.43"
     }
-    r = requests.get(f"https://nitter.poast.org/{account}/rss", headers=headers)
+    r = requests.get(f"https://{nitter_url}/{account}/rss", headers=headers)
     if r.status_code != 200:
         return False
     
     data = json.loads(xml_to_json(r.text))["rss"]["channel"]
     tweet = {
         "pubDate": data["item"][0]["pubDate"]["pubDate"],
-        "link": data["item"][0]["link"]["link"].replace("#m", "").replace("nitter.poast.org", "vxtwitter.com"),
+        "link": data["item"][0]["link"]["link"].replace("#m", "").replace(nitter_url, "vxtwitter.com"),
         "status": "Tweeted",
         "name": data["title"]["title"].split(" / @")[0],
         "avatar": data["image"]["url"]["url"],
@@ -133,7 +134,7 @@ def is_tweetor_exist(account):
     headers = {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/117.0.0.0 Safari/537.36 Edg/117.0.2045.43"
     }
-    r = requests.get(f"https://nitter.poast.org/{account}/rss", headers=headers)
+    r = requests.get(f"https://{nitter_url}/{account}/rss", headers=headers)
     return r.status_code
 
 # Bot部分
