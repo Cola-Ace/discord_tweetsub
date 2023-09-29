@@ -19,7 +19,7 @@ def get_subs():
     file.close()
     return json.loads(data)
 
-def add_sub(channel_id, guild, tweetor):
+def add_sub(channel_id, guild, tweetor, filter=None):
     file = open("./sub.json", mode="r")
     data = json.loads(file.read())
     file.close()
@@ -32,7 +32,7 @@ def add_sub(channel_id, guild, tweetor):
 
     if repeat != True:
         file = open("./sub.json", mode="w")
-        data.append({"channel_id": str(channel_id), "guild_id": str(guild), "tweetor": tweetor, "latest_tweeted": ""})
+        data.append({"channel_id": str(channel_id), "guild_id": str(guild), "tweetor": tweetor, "latest_tweeted": "", "filter": filter})
         file.write(json.dumps(data))
         file.close()
     
@@ -122,7 +122,8 @@ def get_latest_tweet(account):
         "link": data["item"][0]["link"]["link"].replace("#m", "").replace("nitter.poast.org", "vxtwitter.com"),
         "status": "Tweeted",
         "name": data["title"]["title"].split(" / @")[0],
-        "avatar": data["image"]["url"]["url"]
+        "avatar": data["image"]["url"]["url"],
+        "content": data["item"][0]["title"]["title"]
     }
     if data["item"][0]["title"]["title"][0:2] == "RT":
         tweet["status"] = "Retweeted"
@@ -148,7 +149,7 @@ def main():
             await ctx.send("权限不足")
             return
         
-        if len(args) != 2:
+        if len(args) < 2:
             await ctx.send("命令格式错误")
             return
         
@@ -165,7 +166,15 @@ def main():
             await ctx.send(f"输入推特号有误或订阅服务不可用, 状态码: {status_code}")
             return
         
-        add_sub(channel_id, channel.guild.id, tweetor)
+        filter = {"status": "none"}
+        if len(args) >= 4:
+            filter["status"] = args[2]
+            keywords = []
+            for i in range(3, len(args)):
+                keywords.append(args[i])
+            filter["keywords"] = keywords
+        
+        add_sub(channel_id, channel.guild.id, tweetor, filter)
         await ctx.send("添加成功")
 
     @bot.command(name="删除订阅")
@@ -220,7 +229,33 @@ def main():
 
             tweet = get_latest_tweet(data[i]["tweetor"])
             if tweet["pubDate"] != data[i]["latest_tweeted"]:
-                logger.info("新推")
+                next_loop = True # 不符合筛选条件的就continue
+                
+                if data[i]["filter"]["status"] == "none": # 无筛选条件
+                    next_loop = False
+                else:
+                    keywords = data[i]["filter"]["keywords"]
+
+                    # whitelist
+                    if data[i]["filter"]["status"] == "whitelist":
+                        for keyword in keywords:
+                            if tweet["content"].find(keyword) != -1:
+                                next_loop = False
+                                break
+                    # blacklist
+                    else:
+                        find = False
+                        for keyword in keywords:
+                            if tweet["content"].find(keyword) != -1:
+                                find = True
+                                break
+                        
+                        if not find:
+                            next_loop = False
+
+                if next_loop:
+                    continue
+
                 set_latest_tweeted(i, tweet["pubDate"])
 
                 webhook = await channel.create_webhook(name="TweetSub")
