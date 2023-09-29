@@ -6,7 +6,7 @@ import discord
 from discord.ext import commands, tasks
 
 # 配置文件部分
-dc_token = "OTE0ODIwMjI2ODE2ODA2OTM2.G2w89B.JoNgCX7C8q2Lh1I_PtFQjyBTt5U_Mhg6GibJFY" # discord机器人的token
+dc_token = "" # discord机器人的token
 guild_id = "914821735788974120" # 频道ID
 permission_roles = ["Re:0 Wiki Crew│wiki管理團隊│wiki管理团队", "Verity"] # 拥有此权限组的用户视为管理员
 loop_min = 1 # 检测间隔, 以分钟为间隔
