@@ -6,8 +6,9 @@ import discord
 from discord.ext import commands, tasks
 
 # 配置文件部分
-dc_token = "" # discord机器人的token
+dc_token = "OTE0ODIwMjI2ODE2ODA2OTM2.G2w89B.JoNgCX7C8q2Lh1I_PtFQjyBTt5U_Mhg6GibJFY" # discord机器人的token
 guild_id = "914821735788974120" # 频道ID
+permission_roles = ["Re:0 Wiki Crew│wiki管理團隊│wiki管理团队", "Verity"] # 拥有此权限组的用户视为管理员
 loop_min = 1 # 检测间隔, 以分钟为间隔
 
 # 下面的部分不要动
@@ -18,20 +19,20 @@ def get_subs():
     file.close()
     return json.loads(data)
 
-def add_sub(channel_id, tweetor):
+def add_sub(channel_id, guild, tweetor):
     file = open("./sub.json", mode="r")
     data = json.loads(file.read())
     file.close()
 
     repeat = False
     for i in data:
-        if i["channel_id"] == channel_id and i["tweetor"] == tweetor:
+        if i["channel_id"] == channel_id and i["guild_id"] == guild and i["tweetor"] == tweetor:
             repeat = True
             break
 
     if repeat != True:
         file = open("./sub.json", mode="w")
-        data.append({"channel_id": channel_id, "tweetor": tweetor, "latest_tweeted": ""})
+        data.append({"channel_id": str(channel_id), "guild_id": str(guild), "tweetor": tweetor, "latest_tweeted": ""})
         file.write(json.dumps(data))
         file.close()
     
@@ -61,6 +62,17 @@ def set_latest_tweeted(index, date):
     file = open("./sub.json", mode="w")
     file.write(json.dumps(data))
     file.close()
+
+# 权限
+def is_admin(roles):
+    admin = False
+
+    for role in roles:
+        if str(role).rstrip() in permission_roles:
+            admin = True
+            break
+    
+    return admin
 
 # 杂项
 class logger:
@@ -125,8 +137,6 @@ def is_tweetor_exist(account):
 
 # Bot部分
 def main():
-    # print(get_latest_tweet("Rezero_official"))
-
     intents = discord.Intents.default()
     intents.message_content = True
 
@@ -134,6 +144,10 @@ def main():
 
     @bot.command(name="添加订阅")
     async def _sub_add(ctx, *args):
+        if not is_admin(ctx.author.roles):
+            await ctx.send("权限不足")
+            return
+        
         if len(args) != 2:
             await ctx.send("命令格式错误")
             return
@@ -141,16 +155,25 @@ def main():
         channel_id = args[0]
         tweetor = args[1]
 
+        channel = bot.get_channel(int(channel_id))
+        if channel == None:
+            await ctx.send("找不到对应频道")
+            return
+
         status_code = is_tweetor_exist(tweetor)
         if status_code != 200:
             await ctx.send(f"输入推特号有误或订阅服务不可用, 状态码: {status_code}")
             return
         
-        add_sub(channel_id, tweetor)
+        add_sub(channel_id, channel.guild.id, tweetor)
         await ctx.send("添加成功")
 
     @bot.command(name="删除订阅")
     async def _sub_del(ctx, *args):
+        if not is_admin(ctx.author.roles):
+            await ctx.send("权限不足")
+            return
+        
         if len(args) != 1:
             await ctx.send("命令格式错误")
             return
@@ -163,15 +186,22 @@ def main():
 
     @bot.command(name="订阅列表")
     async def _sub_list(ctx):
+        if not is_admin(ctx.author.roles):
+            await ctx.send("权限不足")
+            return
+        
         data = get_subs()
-        output = f"当前订阅如下 (共 {len(data)} 个订阅):\n"
+        output = ""
+
         for i in range(0, len(data)):
             channel = bot.get_channel(int(data[i]["channel_id"]))
             if channel == None:
                 continue
-            output += f"{i + 1}: 频道: {channel.name} | 订阅ID: {data[i]['tweetor']}\n"
+            output += f"{i}. [@{data[i]['tweetor']}](https://twitter.com/{data[i]['tweetor']}): https://discord.com/channels/{data[i]['guild_id']}/{data[i]['channel_id']}\n"
         
-        await ctx.send(output)
+        # await ctx.send(output)
+        embed = discord.Embed(title="Subscriptions", color=0x00FFFF, description=output)
+        await ctx.send(embed=embed)
 
     @bot.event
     async def on_ready():
