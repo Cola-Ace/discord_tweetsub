@@ -11,6 +11,6 @@
 
 # 指令
 
-- `/添加订阅 {频道ID} {推特账号} [{筛选条件} {关键词}]` e.g: 1./添加订阅 111 nezumiironyanko 2./添加订阅 222 Rezero_official blacklist MF J
-- `/删除订阅 {订阅ID}` e.g: /删除订阅 1
+- `/添加订阅 {频道ID} {推特账号} [{筛选条件} {关键词}]` (e.g: `/添加订阅 111 nezumiironyanko` `/添加订阅 222 Rezero_official blacklist MF J`)
+- `/删除订阅 {订阅ID}` (e.g: `/删除订阅 1`)
 - `/订阅列表` (注: 删除订阅的订阅ID在这里获取)
