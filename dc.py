@@ -9,7 +9,7 @@ from discord.ext import commands, tasks
 dc_token = "" # discord机器人的token
 guild_id = "914821735788974120" # 频道ID
 permission_roles = ["Re:0 Wiki Crew│wiki管理團隊│wiki管理团队", "Verity"] # 拥有此权限组的用户视为管理员
-nitter_url = "nitter.poast.org"
+nitter_url = "nitter.poast.org" # nitter源
 loop_min = 1 # 检测间隔, 以分钟为间隔
 
 # 下面的部分不要动
