@@ -132,11 +132,6 @@ def main():
 
     bot = commands.Bot(command_prefix="/", intents=intents)
 
-    @bot.command(name="echo")
-    async def _echo(ctx, *args):
-        arguments = ", ".join(args)
-        await ctx.send(arguments)
-
     @bot.command(name="添加订阅")
     async def _sub_add(ctx, *args):
         if len(args) != 2:
