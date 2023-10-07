@@ -9,10 +9,14 @@ from discord.ext import commands, tasks
 dc_token = "" # discord机器人的token
 guild_id = "914821735788974120" # 频道ID
 permission_roles = ["Re:0 Wiki Crew│wiki管理團隊│wiki管理团队", "Verity"] # 拥有此权限组的用户视为管理员
-nitter_url = "nitter.poast.org" # nitter源
+nitter_url = "nitter.poast.org"
 loop_min = 1 # 检测间隔, 以分钟为间隔
 
 # 下面的部分不要动
+
+headers = {
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/117.0.0.0 Safari/537.36 Edg/117.0.2045.43"
+}
 
 def get_subs():
     file = open("./sub.json", mode="r")
@@ -110,9 +114,6 @@ def xml_to_dict(element):
     return d
 
 def get_latest_tweet(account):
-    headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/117.0.0.0 Safari/537.36 Edg/117.0.2045.43"
-    }
     r = requests.get(f"https://{nitter_url}/{account}/rss", headers=headers)
     if r.status_code != 200:
         return False
@@ -124,18 +125,23 @@ def get_latest_tweet(account):
         "status": "Tweeted",
         "name": data["title"]["title"].split(" / @")[0],
         "avatar": data["image"]["url"]["url"],
-        "content": data["item"][0]["title"]["title"]
+        "content": data["item"][0]["title"]["title"],
+        "full_content": data["item"][0]["description"]["description"],
+        "src_link": data["item"][0]["link"]["link"].replace("#m", "")
     }
     if data["item"][0]["title"]["title"][0:2] == "RT":
         tweet["status"] = "Retweeted"
     return tweet
 
 def is_tweetor_exist(account):
-    headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/117.0.0.0 Safari/537.36 Edg/117.0.2045.43"
-    }
+    
     r = requests.get(f"https://{nitter_url}/{account}/rss", headers=headers)
     return r.status_code
+
+def is_tweet_has_video(src_link):
+    r = requests.get(src_link, headers=headers)
+    result = str(r.content)
+    return result.find("<video") != -1
 
 # Bot部分
 def main():
@@ -244,7 +250,7 @@ def main():
                                 next_loop = False
                                 break
                     # blacklist
-                    else:
+                    elif data[i]["filter"]["status"] == "blacklist":
                         find = False
                         for keyword in keywords:
                             if tweet["content"].find(keyword) != -1:
@@ -253,6 +259,23 @@ def main():
                         
                         if not find:
                             next_loop = False
+                    elif data[i]["filter"]["status"] == "media":
+                        keyword = data[i]["filter"]["keywords"][0]
+                        has_image = tweet["full_content"].find("img") != -1
+                        has_video = is_tweet_has_video(tweet["src_link"])
+                        # include image or video
+                        # doesn't include image or video
+                        # include image
+                        # doesn't include image
+                        # include video
+                        # doesn't include video
+                        if ( keyword == "iv" and not has_image and not has_video ) \
+                        or ( keyword == "!iv" and (has_image or is_tweet_has_video(tweet["src_link"])) ) \
+                        or ( keyword == "i" and not has_image ) \
+                        or ( keyword == "!i" and has_image ) \
+                        or ( keyword == "v" and not has_video ) \
+                        or ( keyword == "!v" and has_video ):
+                            next_loop = True
 
                 if next_loop:
                     continue
