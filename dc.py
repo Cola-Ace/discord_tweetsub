@@ -24,7 +24,7 @@ def get_subs():
     file.close()
     return json.loads(data)
 
-def add_sub(channel_id, guild, tweetor, filter=None):
+def add_sub(channel_id, guild, tweetor, filters=[]):
     file = open("./sub.json", mode="r")
     data = json.loads(file.read())
     file.close()
@@ -37,11 +37,11 @@ def add_sub(channel_id, guild, tweetor, filter=None):
 
     if repeat != True:
         file = open("./sub.json", mode="w")
-        data.append({"channel_id": str(channel_id), "guild_id": str(guild), "tweetor": tweetor, "latest_tweeted": "", "filter": filter})
+        data.append({"channel_id": str(channel_id), "guild_id": str(guild), "tweetor": tweetor, "latest_tweeted": "", "filters": filters})
         file.write(json.dumps(data))
         file.close()
     
-def del_sub(id):
+def del_sub(id, guild_id):
     file = open("./sub.json", mode="r")
     data = json.loads(file.read())
     file.close()
@@ -49,7 +49,15 @@ def del_sub(id):
     if int(id) > len(data):
         return False
     
-    del data[int(id) - 1]
+    subscriptions = []
+    for i in range(0, len(data)):
+        if str(guild_id) == data[i]["guild_id"]:
+            subscriptions.append(i)
+        
+    if len(subscriptions) == 0 or int(id) > len(subscriptions):
+        return False
+    
+    del data[subscriptions[int(id) - 1]]
     
     file = open("./sub.json", mode="w")
     file.write(json.dumps(data))
@@ -173,15 +181,27 @@ def main():
             await ctx.send(f"输入推特号有误或订阅服务不可用, 状态码: {status_code}")
             return
         
-        filter = {"status": "none"}
-        if len(args) >= 4:
-            filter["status"] = args[2]
-            keywords = []
-            for i in range(3, len(args)):
-                keywords.append(args[i])
-            filter["keywords"] = keywords
+        filters = []
+        if len(args) >= 3:
+            for i in range(2, len(args)):
+                filter = {}
+                keywords = []
+
+                arg = args[i].split(",")
+                filter["status"] = arg[0].lstrip("[")
+                for k in range(1, len(arg)):
+                    keywords.append(arg[k].rstrip("]"))
+                filter["keywords"] = keywords
+
+                filters.append(filter)
+
+            # filter["status"] = args[2]
+            # keywords = []
+            # for i in range(3, len(args)):
+            #     keywords.append(args[i])
+            # filter["keywords"] = keywords
         
-        add_sub(channel_id, channel.guild.id, tweetor, filter)
+        add_sub(channel_id, channel.guild.id, tweetor, filters)
         await ctx.send("添加成功")
 
     @bot.command(name="删除订阅")
@@ -194,7 +214,7 @@ def main():
             await ctx.send("命令格式错误")
             return
 
-        if del_sub(args[0]) != True:
+        if del_sub(args[0], ctx.message.guild.id) != True:
             await ctx.send("删除订阅失败")
             return
 
@@ -211,9 +231,23 @@ def main():
 
         for i in range(0, len(data)):
             channel = bot.get_channel(int(data[i]["channel_id"]))
-            if channel == None:
+            guild_id = ctx.message.guild.id # 过滤非本服务器订阅
+            if channel == None or str(guild_id) != data[i]["guild_id"]:
                 continue
-            output += f"{i}. [@{data[i]['tweetor']}](https://twitter.com/{data[i]['tweetor']}): https://discord.com/channels/{data[i]['guild_id']}/{data[i]['channel_id']}\n"
+            filters = "("
+            for filter in data[i]["filters"]:
+                filters += f'{filter["status"]}: ['
+                keywords = ""
+                for keyword in filter["keywords"]:
+                    keywords += f'{keyword},'
+                keywords = keywords.rstrip(",") # 清除多余逗号
+                keywords += "]"
+                filters += f'{keywords};'
+
+            filters = filters.rstrip(";") # 清除多余分号
+            filters += ")"
+
+            output += f"{i}. [@{data[i]['tweetor']}](https://twitter.com/{data[i]['tweetor']}): https://discord.com/channels/{data[i]['guild_id']}/{data[i]['channel_id']} {filters}\n"
         
         # await ctx.send(output)
         embed = discord.Embed(title="Subscriptions", color=0x00FFFF, description=output)
@@ -237,30 +271,31 @@ def main():
             tweet = get_latest_tweet(data[i]["tweetor"])
             if tweet["pubDate"] != data[i]["latest_tweeted"]:
                 next_loop = True # 不符合筛选条件的就continue
-                
-                if data[i]["filter"]["status"] == "none": # 无筛选条件
+
+                if len(data[i]["filters"]) == 0: # 无筛选条件
                     next_loop = False
-                else:
-                    keywords = data[i]["filter"]["keywords"]
+
+                for filter in data[i]["filters"]: # 一个或多个筛选条件
+                    keywords = filter["keywords"] # 关键词提取
 
                     # whitelist
-                    if data[i]["filter"]["status"] == "whitelist":
+                    if filter["status"] == "whitelist":
                         for keyword in keywords:
                             if tweet["content"].find(keyword) != -1:
                                 next_loop = False
                                 break
                     # blacklist
-                    elif data[i]["filter"]["status"] == "blacklist":
+                    elif filter["status"] == "blacklist":
                         find = False
                         for keyword in keywords:
                             if tweet["content"].find(keyword) != -1:
                                 find = True
                                 break
-                        
+                            
                         if not find:
                             next_loop = False
-                    elif data[i]["filter"]["status"] == "media":
-                        keyword = data[i]["filter"]["keywords"][0]
+                    elif filter["status"] == "media":
+                        keyword = filter["keywords"][0]
                         has_image = tweet["full_content"].find("img") != -1
                         has_video = is_tweet_has_video(tweet["src_link"])
                         # include image or video
