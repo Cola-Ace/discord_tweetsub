@@ -142,7 +142,6 @@ def get_latest_tweet(account):
     return tweet
 
 def is_tweetor_exist(account):
-    
     r = requests.get(f"https://{nitter_url}/{account}/rss", headers=headers)
     return r.status_code
 
@@ -269,23 +268,27 @@ def main():
                 continue
 
             tweet = get_latest_tweet(data[i]["tweetor"])
+            logger.info(f'tweetor: {data[i]["tweetor"]} | 最新推文: {tweet["pubDate"]} | 上次推文: {data[i]["latest_tweeted"]}')
             if tweet["pubDate"] != data[i]["latest_tweeted"]:
                 next_loop = True # 不符合筛选条件的就continue
 
                 if len(data[i]["filters"]) == 0: # 无筛选条件
                     next_loop = False
+                    logger.info(f'tweet: {data[i]["tweetor"]} with no filter')
 
                 for filter in data[i]["filters"]: # 一个或多个筛选条件
                     keywords = filter["keywords"] # 关键词提取
 
                     # whitelist
                     if filter["status"] == "whitelist":
+                        logger.info(f'tweet: {data[i]["tweetor"]} with a whitelist {json.dumps(keywords)}')
                         for keyword in keywords:
                             if tweet["content"].find(keyword) != -1:
                                 next_loop = False
                                 break
                     # blacklist
                     elif filter["status"] == "blacklist":
+                        logger.info(f'tweet: {data[i]["tweetor"]} with a blacklist {json.dumps(keywords)}')
                         find = False
                         for keyword in keywords:
                             if tweet["content"].find(keyword) != -1:
@@ -295,9 +298,11 @@ def main():
                         if not find:
                             next_loop = False
                     elif filter["status"] == "media":
+                        logger.info(f'tweet: {data[i]["tweetor"]} with a media {json.dumps(keywords)}')
                         keyword = filter["keywords"][0]
                         has_image = tweet["full_content"].find("img") != -1
                         has_video = is_tweet_has_video(tweet["src_link"])
+                        # 以下筛选条件都与实际代码相反
                         # include image or video
                         # doesn't include image or video
                         # include image
