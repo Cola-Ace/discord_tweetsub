@@ -2,8 +2,7 @@
 
 注意事项：
 
-- 使用前需在 `dc.py` 里配置bot的token
-- `sub.json` 需和 `dc.py` 在同一目录下
+- 使用前需在 `configs/configs.json` 里配置bot的token
 - python需安装依赖库 `requests` 和 `discord.py`
 
 使用方法：直接 `python3 dc.py`
