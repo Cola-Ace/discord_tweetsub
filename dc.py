@@ -1,154 +1,33 @@
 import requests
 import json
-import xml.etree.ElementTree as ET
-import datetime
 import discord
 from discord.ext import commands, tasks
 
+# 自定义模块
+from config import *
+from logger import logger
+from sub import *
+from tweet import *
+
 # 配置文件部分
-dc_token = "" # discord机器人的token
-guild_id = "914821735788974120" # 频道ID
-permission_roles = ["Re:0 Wiki Crew│wiki管理團隊│wiki管理团队", "Verity"] # 拥有此权限组的用户视为管理员
-nitter_url = "nitter.poast.org"
-loop_min = 1 # 检测间隔, 以分钟为间隔
+configs = get_config()
 
-# 下面的部分不要动
-
-headers = {
-    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/117.0.0.0 Safari/537.36 Edg/117.0.2045.43"
-}
-
-def get_subs():
-    file = open("./sub.json", mode="r")
-    data = file.read()
-    file.close()
-    return json.loads(data)
-
-def add_sub(channel_id, guild, tweetor, filters=[]):
-    file = open("./sub.json", mode="r")
-    data = json.loads(file.read())
-    file.close()
-
-    repeat = False
-    for i in data:
-        if i["channel_id"] == channel_id and i["guild_id"] == guild and i["tweetor"] == tweetor:
-            repeat = True
-            break
-
-    if repeat != True:
-        file = open("./sub.json", mode="w")
-        data.append({"channel_id": str(channel_id), "guild_id": str(guild), "tweetor": tweetor, "latest_tweeted": "", "filters": filters})
-        file.write(json.dumps(data))
-        file.close()
-    
-def del_sub(id, guild_id):
-    file = open("./sub.json", mode="r")
-    data = json.loads(file.read())
-    file.close()
-
-    if int(id) > len(data):
-        return False
-    
-    subscriptions = []
-    for i in range(0, len(data)):
-        if str(guild_id) == data[i]["guild_id"]:
-            subscriptions.append(i)
-        
-    if len(subscriptions) == 0 or int(id) > len(subscriptions):
-        return False
-    
-    del data[subscriptions[int(id) - 1]]
-    
-    file = open("./sub.json", mode="w")
-    file.write(json.dumps(data))
-    file.close()
-
-    return True
-
-def set_latest_tweeted(index, date):
-    file = open("./sub.json", mode="r")
-    data = json.loads(file.read())
-    file.close()
-
-    data[index]["latest_tweeted"] = date
-
-    file = open("./sub.json", mode="w")
-    file.write(json.dumps(data))
-    file.close()
+dc_token = configs["token"] # discord机器人的token
+guild_id = configs["guild_id"] # 频道ID
+permission_roles = configs["permission_roles"] # 拥有此权限组的用户视为管理员
+nitter_url = configs["nitter_url"] # nitter 源
+loop_min = int(configs["loop_min"]) # 检测间隔, 以分钟为间隔
 
 # 权限
-def is_admin(roles):
+def is_admin(roles: list):
     admin = False
 
     for role in roles:
-        if str(role).rstrip() in permission_roles:
+        if str(role).lstrip().rstrip() in permission_roles:
             admin = True
             break
     
     return admin
-
-# 杂项
-class logger:
-    def info(msg):
-        print(getNowtime() + " [Info] " + msg)
-    def error(msg):
-        print(getNowtime() + " [Error] " + msg)
-    def warning(msg):
-        print(getNowtime() + " [Warning] " + msg)
-
-def getNowtime():
-    return datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-
-# 获取推文部分
-def xml_to_json(xml_string):
-    root = ET.fromstring(xml_string)
-    return json.dumps({root.tag: xml_to_dict(root)})
-
-def xml_to_dict(element):
-    d = {}
-    if element.attrib:
-        d["@attributes"] = element.attrib
-    if element.text:
-        d[element.tag] = element.text
-    for child in element:
-        child_data = xml_to_dict(child)
-        if child.tag in d:
-            if type(d[child.tag]) is list:
-                d[child.tag].append(child_data)
-            else:
-                d[child.tag] = [d[child.tag], child_data]
-        else:
-            d[child.tag] = child_data
-    return d
-
-def get_latest_tweet(account):
-    r = requests.get(f"https://{nitter_url}/{account}/rss", headers=headers)
-    if r.status_code != 200:
-        return False
-    
-    data = json.loads(xml_to_json(r.text))["rss"]["channel"]
-    tweet = {
-        "pubDate": data["item"][0]["pubDate"]["pubDate"],
-        "link": data["item"][0]["link"]["link"].replace("#m", "").replace(nitter_url, "vxtwitter.com"),
-        "status": "Tweeted",
-        "name": data["title"]["title"].split(" / @")[0],
-        "avatar": data["image"]["url"]["url"],
-        "content": data["item"][0]["title"]["title"],
-        "full_content": data["item"][0]["description"]["description"],
-        "src_link": data["item"][0]["link"]["link"].replace("#m", "")
-    }
-    if data["item"][0]["title"]["title"][0:2] == "RT":
-        tweet["status"] = "Retweeted"
-    return tweet
-
-def is_tweetor_exist(account):
-    r = requests.get(f"https://{nitter_url}/{account}/rss", headers=headers)
-    return r.status_code
-
-def is_tweet_has_video(src_link):
-    r = requests.get(src_link, headers=headers)
-    result = str(r.content)
-    return result.find("<video") != -1
 
 # Bot部分
 def main():
@@ -175,7 +54,7 @@ def main():
             await ctx.send("找不到对应频道")
             return
 
-        status_code = is_tweetor_exist(tweetor)
+        status_code = is_tweetor_exist(tweetor, nitter_url)
         if status_code != 200:
             await ctx.send(f"输入推特号有误或订阅服务不可用, 状态码: {status_code}")
             return
@@ -213,7 +92,7 @@ def main():
             await ctx.send("命令格式错误")
             return
 
-        if del_sub(args[0], ctx.message.guild.id) != True:
+        if del_sub(int(args[0]), str(ctx.message.guild.id)) != True:
             await ctx.send("删除订阅失败")
             return
 
@@ -228,13 +107,18 @@ def main():
         data = get_subs()
         output = ""
 
-        for i in range(0, len(data)):
-            channel = bot.get_channel(int(data[i]["channel_id"]))
-            guild_id = ctx.message.guild.id # 过滤非本服务器订阅
-            if channel == None or str(guild_id) != data[i]["guild_id"]:
+        guild_id = str(ctx.message.guild.id) # 过滤非本服务器订阅
+        if (guild_id not in data) or (len(data[guild_id]) == 0):
+            await ctx.send("当前服务器无订阅")
+            return
+        
+        for i in range(0, len(data[guild_id])):
+            channel = bot.get_channel(int(data[guild_id][i]["channel_id"]))
+            
+            if channel == None:
                 continue
             filters = "("
-            for filter in data[i]["filters"]:
+            for filter in data[guild_id][i]["filters"]:
                 filters += f'{filter["status"]}: ['
                 keywords = ""
                 for keyword in filter["keywords"]:
@@ -246,9 +130,8 @@ def main():
             filters = filters.rstrip(";") # 清除多余分号
             filters += ")"
 
-            output += f"{i}. [@{data[i]['tweetor']}](https://twitter.com/{data[i]['tweetor']}): https://discord.com/channels/{data[i]['guild_id']}/{data[i]['channel_id']} {filters}\n"
+            output += f'{i + 1}. [@{data[guild_id][i]["tweetor"]}](https://twitter.com/{data[guild_id][i]["tweetor"]}): https://discord.com/channels/{guild_id}/{data[guild_id][i]["channel_id"]} {filters}\n'
         
-        # await ctx.send(output)
         embed = discord.Embed(title="Subscriptions", color=0x00FFFF, description=output)
         await ctx.send(embed=embed)
 
@@ -260,71 +143,93 @@ def main():
     @tasks.loop(minutes=loop_min)
     async def _detect():
         data = get_subs()
-        for i in range(0, len(data)):
-            channel = bot.get_channel(int(data[i]["channel_id"]))
+        for guild_id in data.keys():
+            for i in range(0, len(data[guild_id])):
+                channel = bot.get_channel(int(data[guild_id][i]["channel_id"]))
 
-            if channel == None:
-                logger.warning("获取频道失败")
-                continue
-
-            tweet = get_latest_tweet(data[i]["tweetor"])
-            logger.info(f'tweetor: {data[i]["tweetor"]} | 最新推文: {tweet["pubDate"]} | 上次推文: {data[i]["latest_tweeted"]}')
-            if tweet["pubDate"] != data[i]["latest_tweeted"]:
-                next_loop = True # 不符合筛选条件的就continue
-
-                if len(data[i]["filters"]) == 0: # 无筛选条件
-                    next_loop = False
-                    logger.info(f'tweet: {data[i]["tweetor"]} with no filter')
-
-                for filter in data[i]["filters"]: # 一个或多个筛选条件
-                    keywords = filter["keywords"] # 关键词提取
-
-                    # whitelist
-                    if filter["status"] == "whitelist":
-                        logger.info(f'tweet: {data[i]["tweetor"]} with a whitelist {json.dumps(keywords)}')
-                        for keyword in keywords:
-                            if tweet["content"].find(keyword) != -1:
-                                next_loop = False
-                                break
-                    # blacklist
-                    elif filter["status"] == "blacklist":
-                        logger.info(f'tweet: {data[i]["tweetor"]} with a blacklist {json.dumps(keywords)}')
-                        find = False
-                        for keyword in keywords:
-                            if tweet["content"].find(keyword) != -1:
-                                find = True
-                                break
-                            
-                        if not find:
-                            next_loop = False
-                    elif filter["status"] == "media":
-                        logger.info(f'tweet: {data[i]["tweetor"]} with a media {json.dumps(keywords)}')
-                        keyword = filter["keywords"][0]
-                        has_image = tweet["full_content"].find("img") != -1
-                        has_video = is_tweet_has_video(tweet["src_link"])
-                        # 以下筛选条件都与实际代码相反
-                        # include image or video
-                        # doesn't include image or video
-                        # include image
-                        # doesn't include image
-                        # include video
-                        # doesn't include video
-                        if ( keyword == "iv" and not has_image and not has_video ) \
-                        or ( keyword == "!iv" and (has_image or is_tweet_has_video(tweet["src_link"])) ) \
-                        or ( keyword == "i" and not has_image ) \
-                        or ( keyword == "!i" and has_image ) \
-                        or ( keyword == "v" and not has_video ) \
-                        or ( keyword == "!v" and has_video ):
-                            next_loop = True
-
-                if next_loop:
+                if channel == None:
+                    logger.warning("获取频道失败")
                     continue
 
-                set_latest_tweeted(i, tweet["pubDate"])
+                tweet = get_latest_tweet(data[guild_id][i]["tweetor"], nitter_url)
 
-                webhook = await channel.create_webhook(name="TweetSub")
-                await webhook.send(f"{tweet['link']}", username=tweet["name"], avatar_url=tweet["avatar"])
-                await webhook.delete()
+                if tweet == False:
+                    logger.error(f'获取 {data[guild_id][i]["tweetor"]} 的推文失败')
+                    continue
+
+                logger.info(f'tweetor: {data[guild_id][i]["tweetor"]} | 最新推文: {tweet["pubDate"]} | 上次推文: {data[guild_id][i]["latest_tweeted"]}')
+
+                if tweet != False and tweet["pubDate"] != data[guild_id][i]["latest_tweeted"]: # 为最新的推文
+                    next_loop = True # 不符合筛选条件的就continue (值为 False 时代表满足所有筛选条件)
+
+                    # if len(data[i]["filters"]) == 0: # 无筛选条件
+                    #     next_loop = False
+                    #     # logger.info(f'tweet: {data[guild_id][i]["tweetor"]} with no filter')
+
+                    no_pass_filter = False # 未满足的筛选条件
+                    for filter in data[guild_id][i]["filters"]: # 一个或多个筛选条件 (没有筛选条件时不执行, 默认满足所有筛选条件)
+                        if no_pass_filter: # 如果有未满足的筛选条件则直接跳过
+                            next_loop = True
+                            break
+
+                        keywords = filter["keywords"] # 关键词提取
+
+                        # whitelist
+                        if filter["status"] == "whitelist":
+                            # logger.info(f'tweet: {data[i]["tweetor"]} with a whitelist {json.dumps(keywords)}')
+                            for keyword in keywords:
+                                if tweet["content"].find(keyword) != -1: # 未找到白名单关键词
+                                    no_pass_filter = True
+                                    break
+
+                        # blacklist
+                        elif filter["status"] == "blacklist":
+                            # logger.info(f'tweet: {data[i]["tweetor"]} with a blacklist {json.dumps(keywords)}')
+                            find = False # 是否找到黑名单关键词
+                            for keyword in keywords:
+                                if tweet["content"].find(keyword) != -1: # 找到黑名单关键词
+                                    find = True
+                                    break
+                                
+                            if find: # 如果存在黑名单关键词
+                                no_pass_filter = True
+                                
+                        # media
+                        elif filter["status"] == "media":
+                            # logger.info(f'tweet: {data[i]["tweetor"]} with a media {json.dumps(keywords)}')
+                            keyword = filter["keywords"][0]
+                            has_image = tweet["full_content"].find("img") != -1
+                            has_video = is_tweet_has_video(tweet["src_link"])
+                            # 以下筛选条件都与实际代码相反
+                            # include image or video
+                            # doesn't include image or video
+                            # include image
+                            # doesn't include image
+                            # include video
+                            # doesn't include video
+                            if ( keyword == "iv" and not has_image and not has_video ) \
+                            or ( keyword == "!iv" and (has_image or is_tweet_has_video(tweet["src_link"])) ) \
+                            or ( keyword == "i" and not has_image ) \
+                            or ( keyword == "!i" and has_image ) \
+                            or ( keyword == "v" and not has_video ) \
+                            or ( keyword == "!v" and has_video ):
+                                no_pass_filter = True
+                    
+                    if no_pass_filter:
+                        next_loop = True
+
+                    if next_loop:
+                        continue
+
+                    set_latest_tweeted(guild_id, i, tweet["pubDate"])
+
+                    webhook = await channel.create_webhook(name="TweetSub")
+                    await webhook.send(f"{tweet['link']}", username=tweet["name"], avatar_url=tweet["avatar"])
+                    await webhook.delete()
+    
+    @_detect.after_loop
+    async def _restart_loop():
+        _detect.start()
 
     bot.run(dc_token)
 
