@@ -25,7 +25,7 @@ def add_sub(channel_id: str, guild: str, tweetor: str, filters=[]):
 
     if repeat != True:
         file = open(file_url, mode="w")
-        data.append({"channel_id": channel_id, "tweetor": tweetor, "latest_tweeted": "", "filters": filters})
+        data[guild].append({"channel_id": channel_id, "tweetor": tweetor, "latest_tweeted": "", "filters": filters})
         file.write(json.dumps(data))
         file.close()
 
@@ -38,7 +38,7 @@ def del_sub(id: int, guild_id: str):
     if (guild_id not in data) or (id > len(data[guild_id])): # 频道不存在 或 id 超出范围
         return False
     
-    del data[guild_id][id]
+    del data[guild_id][id - 1]
     
     file = open(file_url, mode="w")
     file.write(json.dumps(data))

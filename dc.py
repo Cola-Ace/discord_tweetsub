@@ -72,14 +72,8 @@ def main():
                 filter["keywords"] = keywords
 
                 filters.append(filter)
-
-            # filter["status"] = args[2]
-            # keywords = []
-            # for i in range(3, len(args)):
-            #     keywords.append(args[i])
-            # filter["keywords"] = keywords
         
-        add_sub(channel_id, channel.guild.id, tweetor, filters)
+        add_sub(str(channel_id), str(channel.guild.id), tweetor, filters)
         await ctx.send("添加成功")
 
     @bot.command(name="删除订阅")
@@ -144,6 +138,7 @@ def main():
     async def _detect():
         data = get_subs()
         for guild_id in data.keys():
+            logger.info(f'正在获取 {guild_id} 的 {len(data[guild_id])} 个订阅')
             for i in range(0, len(data[guild_id])):
                 channel = bot.get_channel(int(data[guild_id][i]["channel_id"]))
 
@@ -157,18 +152,18 @@ def main():
                     logger.error(f'获取 {data[guild_id][i]["tweetor"]} 的推文失败')
                     continue
 
-                logger.info(f'tweetor: {data[guild_id][i]["tweetor"]} | 最新推文: {tweet["pubDate"]} | 上次推文: {data[guild_id][i]["latest_tweeted"]}')
+                # logger.info(f'tweetor: {data[guild_id][i]["tweetor"]} | 最新推文: {tweet["pubDate"]} | 上次推文: {data[guild_id][i]["latest_tweeted"]}')
 
                 if tweet != False and tweet["pubDate"] != data[guild_id][i]["latest_tweeted"]: # 为最新的推文
                     next_loop = True # 不符合筛选条件的就continue (值为 False 时代表满足所有筛选条件)
 
-                    # if len(data[i]["filters"]) == 0: # 无筛选条件
-                    #     next_loop = False
-                    #     # logger.info(f'tweet: {data[guild_id][i]["tweetor"]} with no filter')
+                    if len(data[guild_id][i]["filters"]) == 0: # 无筛选条件
+                        logger.info(f'tweet: {data[guild_id][i]["tweetor"]} with no filter')
 
                     no_pass_filter = False # 未满足的筛选条件
                     for filter in data[guild_id][i]["filters"]: # 一个或多个筛选条件 (没有筛选条件时不执行, 默认满足所有筛选条件)
                         if no_pass_filter: # 如果有未满足的筛选条件则直接跳过
+                            logger.info("有未满足的筛选条件")
                             next_loop = True
                             break
 
@@ -176,15 +171,19 @@ def main():
 
                         # whitelist
                         if filter["status"] == "whitelist":
-                            # logger.info(f'tweet: {data[i]["tweetor"]} with a whitelist {json.dumps(keywords)}')
+                            logger.info(f'tweet: {data[guild_id][i]["tweetor"]} with a whitelist {json.dumps(keywords)}')
+                            find = False
                             for keyword in keywords:
-                                if tweet["content"].find(keyword) != -1: # 未找到白名单关键词
-                                    no_pass_filter = True
+                                if tweet["content"].find(keyword) != -1: # 找到白名单关键词
+                                    find = True
                                     break
+                            
+                            if not find:
+                                no_pass_filter = True
 
                         # blacklist
                         elif filter["status"] == "blacklist":
-                            # logger.info(f'tweet: {data[i]["tweetor"]} with a blacklist {json.dumps(keywords)}')
+                            logger.info(f'tweet: {data[guild_id][i]["tweetor"]} with a blacklist {json.dumps(keywords)}')
                             find = False # 是否找到黑名单关键词
                             for keyword in keywords:
                                 if tweet["content"].find(keyword) != -1: # 找到黑名单关键词
@@ -192,11 +191,12 @@ def main():
                                     break
                                 
                             if find: # 如果存在黑名单关键词
+                                logger.info(f'twwet: {data[guild_id][i]["tweetor"]} no pass blacklist')
                                 no_pass_filter = True
                                 
                         # media
                         elif filter["status"] == "media":
-                            # logger.info(f'tweet: {data[i]["tweetor"]} with a media {json.dumps(keywords)}')
+                            logger.info(f'tweet: {data[guild_id][i]["tweetor"]} with a media {json.dumps(keywords)}')
                             keyword = filter["keywords"][0]
                             has_image = tweet["full_content"].find("img") != -1
                             has_video = is_tweet_has_video(tweet["src_link"])
@@ -207,16 +207,27 @@ def main():
                             # doesn't include image
                             # include video
                             # doesn't include video
-                            if ( keyword == "iv" and not has_image and not has_video ) \
-                            or ( keyword == "!iv" and (has_image or is_tweet_has_video(tweet["src_link"])) ) \
-                            or ( keyword == "i" and not has_image ) \
-                            or ( keyword == "!i" and has_image ) \
-                            or ( keyword == "v" and not has_video ) \
-                            or ( keyword == "!v" and has_video ):
+                            if ( keyword == "iv" and not has_image and not has_video ):
+                                logger.info(f'tweet: {data[guild_id][i]["tweetor"]} no pass media {keyword}')
+                                no_pass_filter = True
+                            elif ( keyword == "!iv" and (has_image or is_tweet_has_video(tweet["src_link"])) ):
+                                logger.info(f'tweet: {data[guild_id][i]["tweetor"]} no pass media {keyword}')
+                                no_pass_filter = True
+                            elif ( keyword == "i" and not has_image ):
+                                logger.info(f'tweet: {data[guild_id][i]["tweetor"]} no pass media {keyword}')
+                                no_pass_filter = True
+                            elif ( keyword == "!i" and has_image ):
+                                logger.info(f'tweet: {data[guild_id][i]["tweetor"]} no pass media {keyword}')
+                                no_pass_filter = True
+                            elif ( keyword == "v" and not has_video ):
+                                logger.info(f'tweet: {data[guild_id][i]["tweetor"]} no pass media {keyword}')
+                                no_pass_filter = True
+                            elif ( keyword == "!v" and has_video ):
+                                logger.info(f'tweet: {data[guild_id][i]["tweetor"]} no pass media {keyword}')
                                 no_pass_filter = True
                     
-                    if no_pass_filter:
-                        next_loop = True
+                    if no_pass_filter == False:
+                        next_loop = False
 
                     if next_loop:
                         continue
