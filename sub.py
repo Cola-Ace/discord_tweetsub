@@ -26,7 +26,7 @@ def add_sub(channel_id: str, guild: str, tweetor: str, filters=[]):
     if repeat != True:
         file = open(file_url, mode="w")
         data[guild].append({"channel_id": channel_id, "tweetor": tweetor, "latest_tweeted": "", "filters": filters})
-        file.write(json.dumps(data))
+        json.dump(data, file)
         file.close()
 
     
@@ -41,7 +41,7 @@ def del_sub(id: int, guild_id: str):
     del data[guild_id][id - 1]
     
     file = open(file_url, mode="w")
-    file.write(json.dumps(data))
+    json.dump(data, file)
     file.close()
 
     return True
@@ -55,5 +55,5 @@ def set_latest_tweeted(guild_id: str, index: int, date: str):
     data[guild_id][index]["latest_tweeted"] = date
 
     file = open(file_url, mode="w")
-    file.write(json.dumps(data))
+    json.dump(data, file)
     file.close()
